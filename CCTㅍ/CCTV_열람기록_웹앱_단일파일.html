@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CCTV 열람기록 시민 공개 시스템</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+      :root {
+        --ink: #172033;
+        --muted: #647084;
+        --line: #d9e2ec;
+        --surface: #ffffff;
+        --page: #eef3f8;
+        --green: #116149;
+        --green-soft: #dff7ed;
+        --orange: #f97316;
+        --red: #b42318;
+        --blue: #2563eb;
+        --shadow: 0 20px 50px rgba(23, 32, 51, 0.14);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: Arial, "Noto Sans KR", sans-serif;
+        background: var(--page);
+      }
+      button, input, textarea, select { font: inherit; }
+      button { cursor: pointer; }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 22px 28px;
+        background: #fff;
+        border-bottom: 1px solid var(--line);
+      }
+      .eyebrow {
+        margin: 0 0 4px;
+        color: var(--green);
+        font-weight: 700;
+        font-size: 13px;
+      }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { margin-bottom: 0; font-size: 28px; }
+      .tabs, .chips, .action-row { display: flex; flex-wrap: wrap; gap: 8px; }
+      .tabs button, .chip, .secondary, .primary {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--ink);
+        min-height: 38px;
+        padding: 0 14px;
+        font-weight: 700;
+      }
+      .tabs button.active, .chip.active {
+        color: #fff;
+        border-color: var(--green);
+        background: var(--green);
+      }
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 420px;
+        gap: 20px;
+        padding: 20px;
+      }
+      .searchbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .searchbar input {
+        flex: 1;
+        min-height: 46px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 14px;
+        background: #fff;
+      }
+      .map-card {
+        height: calc(100vh - 230px);
+        min-height: 460px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ccd8e2;
+        box-shadow: var(--shadow);
+      }
+      .cctv-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .cctv-pill {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        align-items: flex-start;
+        min-height: 74px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        text-align: left;
+      }
+      .cctv-pill.active {
+        border-color: var(--green);
+        box-shadow: inset 0 0 0 2px var(--green-soft);
+      }
+      .cctv-pill span { color: var(--muted); font-size: 13px; }
+      .side-panel {
+        align-self: start;
+        max-height: calc(100vh - 116px);
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+      .panel-content { padding: 22px; }
+      .panel-heading {
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 18px;
+        padding-bottom: 16px;
+      }
+      .panel-heading h2 { margin: 8px 0 6px; font-size: 23px; }
+      .panel-heading p { margin-bottom: 0; color: var(--muted); line-height: 1.5; }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        border-radius: 999px;
+        padding: 0 10px;
+        color: var(--green);
+        background: var(--green-soft);
+        font-size: 13px;
+        font-weight: 800;
+      }
+      .badge.muted { color: var(--blue); background: #e8efff; }
+      .warning-box { display: grid; gap: 8px; margin-bottom: 16px; }
+      .warning-box strong {
+        display: block;
+        border-left: 4px solid var(--orange);
+        border-radius: 8px;
+        padding: 12px;
+        color: var(--red);
+        background: #fff4e8;
+      }
+      .info-grid {
+        display: grid;
+        grid-template-columns: 118px 1fr;
+        gap: 12px;
+        margin: 0 0 18px;
+      }
+      .info-grid dt { color: var(--muted); font-weight: 700; }
+      .info-grid dd { margin: 0; line-height: 1.5; }
+      .primary { border-color: var(--green); color: #fff; background: var(--green); }
+      .secondary { border-color: var(--blue); color: var(--blue); }
+      .log-list {
+        display: grid;
+        gap: 10px;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+      .log-list li, .report-item {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 13px;
+        background: #fbfdff;
+      }
+      .log-list time, .report-item span {
+        display: block;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .log-list strong { display: block; margin: 5px 0; }
+      .log-list span { color: var(--green); font-weight: 700; }
+      .form-stack, .mini-form, .admin-grid, .report-list { display: grid; gap: 12px; }
+      label { display: grid; gap: 7px; color: var(--muted); font-weight: 700; }
+      input, textarea, select {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 11px 12px;
+        background: #fff;
+        color: var(--ink);
+      }
+      textarea { min-height: 150px; resize: vertical; }
+      .mini-form {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: #fbfdff;
+      }
+      .two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .report-item p { margin: 7px 0; line-height: 1.5; }
+      .empty {
+        padding: 18px;
+        color: var(--muted);
+        border: 1px dashed var(--line);
+        border-radius: 8px;
+        background: #fbfdff;
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        z-index: 1000;
+        transform: translateX(-50%);
+        max-width: min(520px, calc(100vw - 32px));
+        border-radius: 8px;
+        padding: 14px 18px;
+        color: #fff;
+        background: #172033;
+        box-shadow: var(--shadow);
+      }
+      @media (max-width: 980px) {
+        .topbar, .searchbar { align-items: stretch; flex-direction: column; }
+        .workspace { grid-template-columns: 1fr; }
+        .map-card { height: 58vh; min-height: 390px; }
+        .side-panel { max-height: none; }
+      }
+      @media (max-width: 560px) {
+        .topbar, .workspace { padding: 16px; }
+        h1 { font-size: 22px; }
+        .tabs button, .chip { flex: 1; }
+        .chips, .action-row { display: grid; grid-template-columns: 1fr 1fr; }
+        .info-grid, .two-cols { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      const { useEffect, useMemo, useRef, useState } = React;
+      const PURPOSES = ["전체", "방범", "교통", "시설관리", "재난안전"];
+      const initialDb = {
+        cctvs: [
+          ["cctv-001", "시청광장 북측 CCTV", "서울 중구 세종대로 110", "방범", "서울특별시 중구청", "운영중", 37.56661, 126.97839],
+          ["cctv-002", "광화문 교차로 CCTV", "서울 종로구 세종대로 172", "교통", "서울경찰청", "운영중", 37.57164, 126.97677],
+          ["cctv-003", "청계천 산책로 CCTV", "서울 중구 청계천로 8", "시설관리", "서울시설공단", "운영중", 37.56891, 126.98308],
+          ["cctv-004", "을지로입구역 CCTV", "서울 중구 을지로 42", "방범", "서울교통공사", "점검중", 37.56614, 126.98283],
+          ["cctv-005", "남대문시장 입구 CCTV", "서울 중구 남대문시장4길 21", "방범", "서울특별시 중구청", "운영중", 37.55941, 126.97738],
+          ["cctv-006", "서울역 버스환승센터 CCTV", "서울 중구 한강대로 405", "교통", "서울교통정보센터", "운영중", 37.55471, 126.97068],
+          ["cctv-007", "덕수궁 돌담길 CCTV", "서울 중구 정동길 2", "시설관리", "문화재청", "운영중", 37.56591, 126.97486],
+          ["cctv-008", "명동 중앙로 CCTV", "서울 중구 명동길 14", "방범", "서울특별시 중구청", "운영중", 37.56372, 126.98501],
+          ["cctv-009", "종각역 보행로 CCTV", "서울 종로구 종로 55", "교통", "서울경찰청", "운영중", 37.57018, 126.98305],
+          ["cctv-010", "숭례문 광장 CCTV", "서울 중구 세종대로 40", "재난안전", "서울시 안전총괄실", "운영중", 37.55998, 126.97531],
+          ["cctv-011", "서울광장 행사안전 CCTV", "서울 중구 세종대로 110 서울광장", "재난안전", "서울시 안전총괄실", "운영중", 37.56572, 126.97798],
+          ["cctv-012", "무교동 골목 CCTV", "서울 중구 무교로 21", "방범", "서울특별시 중구청", "운영중", 37.56798, 126.97994]
+        ].map(([id, name, location, purpose, agency, status, lat, lng]) => ({ id, name, location, purpose, agency, status, lat, lng })),
+        accessLogs: [
+          ["log-001", "cctv-001", "2026-05-16T09:20:00+09:00", "교통사고 확인", "서울경찰청"],
+          ["log-002", "cctv-001", "2026-05-16T10:10:00+09:00", "실종 신고 동선 확인", "중부경찰서"],
+          ["log-003", "cctv-002", "2026-05-16T08:35:00+09:00", "출근길 정체 분석", "서울교통정보센터"],
+          ["log-004", "cctv-003", "2026-05-15T23:40:00+09:00", "시설물 파손 확인", "서울시설공단"],
+          ["log-005", "cctv-003", "2026-05-16T00:30:00+09:00", "야간 안전 순찰", "서울시설공단"],
+          ["log-006", "cctv-003", "2026-05-16T02:15:00+09:00", "민원 신고 확인", "중구청 도시안전과"],
+          ["log-007", "cctv-004", "2026-05-14T14:05:00+09:00", "역사 내 안전점검", "서울교통공사"],
+          ["log-008", "cctv-005", "2026-05-16T11:00:00+09:00", "절도 신고 확인", "남대문경찰서"],
+          ["log-009", "cctv-006", "2026-05-16T07:50:00+09:00", "버스 접촉사고 확인", "서울교통정보센터"],
+          ["log-010", "cctv-008", "2026-05-16T01:10:00+09:00", "야간 민원 확인", "중구청 도시안전과"],
+          ["log-011", "cctv-008", "2026-05-16T01:45:00+09:00", "사건 발생 지점 확인", "중부경찰서"],
+          ["log-012", "cctv-008", "2026-05-16T02:25:00+09:00", "인파 밀집 확인", "서울시 안전총괄실"],
+          ["log-013", "cctv-008", "2026-05-16T03:10:00+09:00", "신고 현장 확인", "중부경찰서"],
+          ["log-014", "cctv-009", "2026-05-15T18:30:00+09:00", "보행자 사고 확인", "서울경찰청"],
+          ["log-015", "cctv-010", "2026-05-16T06:05:00+09:00", "풍수해 대비 현장 점검", "서울시 안전총괄실"],
+          ["log-016", "cctv-011", "2026-05-16T10:45:00+09:00", "행사장 안전관리", "서울시 안전총괄실"],
+          ["log-017", "cctv-012", "2026-05-16T04:20:00+09:00", "소음 민원 현장 확인", "중구청 도시안전과"]
+        ].map(([id, cctvId, date, purpose, agency]) => ({ id, cctvId, date, purpose, agency })),
+        reports: [
+          { id: "report-001", cctvId: "cctv-008", cctvName: "명동 중앙로 CCTV", content: "새벽 시간대 열람이 반복되어 사생활 침해가 우려됩니다.", contact: "", status: "검토중", createdAt: "2026-05-16T04:40:00+09:00" },
+          { id: "report-002", cctvId: "cctv-003", cctvName: "청계천 산책로 CCTV", content: "산책로 방향을 과도하게 확대해 촬영하는 것 같아 확인을 요청합니다.", contact: "010-0000-1234", status: "접수", createdAt: "2026-05-15T22:10:00+09:00" }
+        ]
+      };
+
+      function loadDb() {
+        const saved = localStorage.getItem("cctv-single-file-db");
+        return saved ? JSON.parse(saved) : initialDb;
+      }
+      function saveDb(db) {
+        localStorage.setItem("cctv-single-file-db", JSON.stringify(db));
+      }
+      function formatDateTime(value) {
+        if (!value) return "기록 없음";
+        return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+      }
+      function buildSummary(cctv, logs) {
+        const related = logs.filter(log => log.cctvId === cctv.id).sort((a, b) => new Date(b.date) - new Date(a.date));
+        const recent = related.slice(0, 6);
+        const last = recent[0] || null;
+        const now = new Date("2026-05-16T12:00:00+09:00");
+        const last24h = related.filter(log => now - new Date(log.date) <= 24 * 60 * 60 * 1000);
+        const night = related.filter(log => {
+          const hour = new Date(log.date).getHours();
+          return hour >= 22 || hour < 6;
+        });
+        const warnings = [];
+        if (last24h.length >= 4) warnings.push("최근 열람 증가");
+        if (night.length >= 3) warnings.push("비정상 시간대 열람 주의");
+        return { ...cctv, recentAccessCount: recent.length, lastAccessAt: last?.date || null, accessReasonSummary: recent.map(log => log.purpose).join(", ") || "최근 열람 없음", warnings };
+      }
+      function createId(prefix) {
+        return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      }
+
+      function App() {
+        const [db, setDb] = useState(loadDb);
+        const [selectedId, setSelectedId] = useState(db.cctvs[0]?.id || "");
+        const [query, setQuery] = useState("");
+        const [purpose, setPurpose] = useState("전체");
+        const [view, setView] = useState("map");
+        const [notice, setNotice] = useState("");
+        const cctvs = useMemo(() => db.cctvs.map(cctv => buildSummary(cctv, db.accessLogs)), [db]);
+        const selected = cctvs.find(cctv => cctv.id === selectedId) || cctvs[0];
+        const logs = db.accessLogs.filter(log => log.cctvId === selected?.id).sort((a, b) => new Date(b.date) - new Date(a.date));
+        const filteredCctvs = useMemo(() => {
+          const keyword = query.trim().toLowerCase();
+          return cctvs.filter(cctv => {
+            const matchesPurpose = purpose === "전체" || cctv.purpose === purpose;
+            const matchesQuery = !keyword || cctv.name.toLowerCase().includes(keyword) || cctv.location.toLowerCase().includes(keyword) || cctv.agency.toLowerCase().includes(keyword);
+            return matchesPurpose && matchesQuery;
+          });
+        }, [cctvs, query, purpose]);
+        function updateDb(nextDb) {
+          setDb(nextDb);
+          saveDb(nextDb);
+        }
+        function selectCctv(cctv) {
+          setSelectedId(cctv.id);
+          setView("map");
+        }
+        return React.createElement("div", null,
+          React.createElement(Header, { view, setView }),
+          React.createElement("main", { className: "workspace" },
+            React.createElement("section", null,
+              React.createElement(SearchBar, { query, setQuery, purpose, setPurpose }),
+              React.createElement(CctvMap, { cctvs: filteredCctvs, selected, onSelect: selectCctv }),
+              React.createElement(CctvStrip, { cctvs: filteredCctvs, selected, onSelect: selectCctv })
+            ),
+            React.createElement("aside", { className: "side-panel" },
+              view === "map" && React.createElement(DetailPanel, { selected, logs, setView }),
+              view === "logs" && React.createElement(LogPanel, { selected, logs }),
+              view === "report" && React.createElement(ReportPanel, { selected, db, updateDb, setNotice }),
+              view === "admin" && React.createElement(AdminPanel, { db, updateDb, setNotice })
+            )
+          ),
+          notice && React.createElement("div", { className: "toast", onClick: () => setNotice("") }, notice)
+        );
+      }
+      function Header({ view, setView }) {
+        return React.createElement("header", { className: "topbar" },
+          React.createElement("div", null, React.createElement("p", { className: "eyebrow" }, "시민 공개형 CCTV 투명성 서비스"), React.createElement("h1", null, "CCTV 열람기록 추적 시스템")),
+          React.createElement("nav", { className: "tabs" }, [["map", "지도"], ["logs", "열람기록"], ["report", "시민 제보"], ["admin", "관리자 샘플"]].map(([key, label]) => React.createElement("button", { key, className: view === key ? "active" : "", onClick: () => setView(key) }, label)))
+        );
+      }
+      function SearchBar({ query, setQuery, purpose, setPurpose }) {
+        return React.createElement("div", { className: "searchbar" },
+          React.createElement("input", { value: query, onChange: e => setQuery(e.target.value), placeholder: "지역명, CCTV 이름, 기관명 검색" }),
+          React.createElement("div", { className: "chips" }, PURPOSES.map(item => React.createElement("button", { key: item, className: purpose === item ? "chip active" : "chip", onClick: () => setPurpose(item) }, item)))
+        );
+      }
+      function CctvMap({ cctvs, selected, onSelect }) {
+        const mapRef = useRef(null);
+        const layerRef = useRef(null);
+        const containerRef = useRef(null);
+        useEffect(() => {
+          if (mapRef.current) return;
+          mapRef.current = L.map(containerRef.current, { zoomControl: false }).setView([37.5666, 126.9784], 15);
+          L.control.zoom({ position: "bottomright" }).addTo(mapRef.current);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors" }).addTo(mapRef.current);
+          if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => mapRef.current.setView([pos.coords.latitude, pos.coords.longitude], 15));
+        }, []);
+        useEffect(() => {
+          if (!mapRef.current) return;
+          if (layerRef.current) layerRef.current.remove();
+          layerRef.current = L.layerGroup().addTo(mapRef.current);
+          cctvs.forEach(cctv => {
+            const marker = L.circleMarker([cctv.lat, cctv.lng], {
+              radius: selected?.id === cctv.id ? 12 : 9,
+              color: cctv.warnings.length ? "#b42318" : "#14532d",
+              fillColor: cctv.warnings.length ? "#f97316" : "#22c55e",
+              fillOpacity: 0.9,
+              weight: 3
+            });
+            marker.bindPopup(`<strong>${cctv.name}</strong><br>${cctv.location}<br>${cctv.purpose} · ${cctv.agency}`);
+            marker.on("click", () => onSelect(cctv));
+            marker.addTo(layerRef.current);
+          });
+        }, [cctvs, selected?.id]);
+        return React.createElement("div", { className: "map-card", ref: containerRef });
+      }
+      function CctvStrip({ cctvs, selected, onSelect }) {
+        return React.createElement("div", { className: "cctv-strip" }, cctvs.map(cctv => React.createElement("button", { key: cctv.id, className: selected?.id === cctv.id ? "cctv-pill active" : "cctv-pill", onClick: () => onSelect(cctv) }, React.createElement("strong", null, cctv.name), React.createElement("span", null, `${cctv.purpose} · ${cctv.status}`))));
+      }
+      function DetailPanel({ selected, logs, setView }) {
+        if (!selected) return React.createElement("div", { className: "empty" }, "CCTV를 선택해 주세요.");
+        return React.createElement("div", { className: "panel-content" },
+          React.createElement("div", { className: "panel-heading" }, React.createElement("span", { className: "badge" }, selected.purpose), React.createElement("h2", null, selected.name), React.createElement("p", null, selected.location)),
+          selected.warnings.length > 0 && React.createElement("div", { className: "warning-box" }, selected.warnings.map(w => React.createElement("strong", { key: w }, w))),
+          React.createElement("dl", { className: "info-grid" },
+            React.createElement("dt", null, "CCTV ID"), React.createElement("dd", null, selected.id),
+            React.createElement("dt", null, "설치 목적"), React.createElement("dd", null, selected.purpose),
+            React.createElement("dt", null, "관리 기관"), React.createElement("dd", null, selected.agency),
+            React.createElement("dt", null, "운영 상태"), React.createElement("dd", null, selected.status),
+            React.createElement("dt", null, "최근 열람 횟수"), React.createElement("dd", null, `${selected.recentAccessCount}회`),
+            React.createElement("dt", null, "최근 열람 일시"), React.createElement("dd", null, formatDateTime(selected.lastAccessAt)),
+            React.createElement("dt", null, "열람 사유 요약"), React.createElement("dd", null, selected.accessReasonSummary)
+          ),
+          React.createElement("div", { className: "action-row" }, React.createElement("button", { className: "primary", onClick: () => setView("logs") }, "열람기록 보기"), React.createElement("button", { className: "secondary", onClick: () => setView("report") }, "제보하기")),
+          React.createElement("h3", null, "최근 공개 열람기록"), React.createElement(LogList, { logs: logs.slice(0, 4) })
+        );
+      }
+      function LogPanel({ selected, logs }) {
+        return React.createElement("div", { className: "panel-content" }, React.createElement("div", { className: "panel-heading" }, React.createElement("span", { className: "badge muted" }, "개인정보 비공개"), React.createElement("h2", null, selected ? `${selected.name} 열람기록` : "열람기록"), React.createElement("p", null, "기관명, 열람 날짜, 열람 목적만 시민에게 공개됩니다.")), React.createElement(LogList, { logs }));
+      }
+      function LogList({ logs }) {
+        if (!logs.length) return React.createElement("div", { className: "empty" }, "공개할 열람기록이 없습니다.");
+        return React.createElement("ul", { className: "log-list" }, logs.map(log => React.createElement("li", { key: log.id }, React.createElement("time", null, formatDateTime(log.date)), React.createElement("strong", null, log.purpose), React.createElement("span", null, log.agency))));
+      }
+      function ReportPanel({ selected, db, updateDb, setNotice }) {
+        const [content, setContent] = useState("");
+        const [contact, setContact] = useState("");
+        function submitReport(event) {
+          event.preventDefault();
+          const report = { id: createId("report"), cctvId: selected?.id || "", cctvName: selected?.name || "선택 안 됨", content, contact, status: "접수", createdAt: new Date().toISOString() };
+          updateDb({ ...db, reports: [...db.reports, report] });
+          setContent("");
+          setContact("");
+          setNotice("제보가 접수되었습니다.");
+        }
+        return React.createElement("form", { className: "panel-content form-stack", onSubmit: submitReport }, React.createElement("div", { className: "panel-heading" }, React.createElement("span", { className: "badge" }, "시민 제보"), React.createElement("h2", null, selected ? selected.name : "CCTV 선택 필요"), React.createElement("p", null, "의심스러운 열람이나 사생활 침해 우려를 남길 수 있습니다.")), React.createElement("label", null, "제보 내용", React.createElement("textarea", { value: content, onChange: e => setContent(e.target.value), placeholder: "예: 새벽 시간대 열람이 반복되어 확인을 요청합니다.", required: true })), React.createElement("label", null, "연락처 선택 입력", React.createElement("input", { value: contact, onChange: e => setContact(e.target.value), placeholder: "답변을 받고 싶을 때만 입력" })), React.createElement("button", { className: "primary" }, "제보 제출"));
+      }
+      function AdminPanel({ db, updateDb, setNotice }) {
+        const [cctvForm, setCctvForm] = useState({ name: "", location: "", purpose: "방범", agency: "", status: "운영중", lat: "37.5666", lng: "126.9784" });
+        const [logForm, setLogForm] = useState({ cctvId: db.cctvs[0]?.id || "", date: "2026-05-16T13:00", purpose: "", agency: "" });
+        function submitCctv(event) {
+          event.preventDefault();
+          const cctv = { ...cctvForm, id: createId("cctv"), lat: Number(cctvForm.lat), lng: Number(cctvForm.lng) };
+          updateDb({ ...db, cctvs: [...db.cctvs, cctv] });
+          setNotice("CCTV가 등록되었습니다.");
+          setCctvForm({ ...cctvForm, name: "", location: "", agency: "" });
+        }
+        function submitLog(event) {
+          event.preventDefault();
+          const log = { id: createId("log"), ...logForm };
+          updateDb({ ...db, accessLogs: [...db.accessLogs, log] });
+          setNotice("열람기록이 등록되었습니다.");
+          setLogForm({ ...logForm, purpose: "", agency: "" });
+        }
+        return React.createElement("div", { className: "panel-content admin-grid" },
+          React.createElement("div", { className: "panel-heading" }, React.createElement("span", { className: "badge muted" }, "샘플 관리자"), React.createElement("h2", null, "데이터 입력 화면"), React.createElement("p", null, "서버 없이 브라우저 저장소에 임시 저장됩니다.")),
+          React.createElement("form", { className: "mini-form", onSubmit: submitCctv }, React.createElement("h3", null, "CCTV 등록"), React.createElement("input", { value: cctvForm.name, onChange: e => setCctvForm({ ...cctvForm, name: e.target.value }), placeholder: "CCTV 이름", required: true }), React.createElement("input", { value: cctvForm.location, onChange: e => setCctvForm({ ...cctvForm, location: e.target.value }), placeholder: "설치 위치", required: true }), React.createElement("select", { value: cctvForm.purpose, onChange: e => setCctvForm({ ...cctvForm, purpose: e.target.value }) }, PURPOSES.slice(1).map(item => React.createElement("option", { key: item }, item))), React.createElement("input", { value: cctvForm.agency, onChange: e => setCctvForm({ ...cctvForm, agency: e.target.value }), placeholder: "관리 기관", required: true }), React.createElement("div", { className: "two-cols" }, React.createElement("input", { value: cctvForm.lat, onChange: e => setCctvForm({ ...cctvForm, lat: e.target.value }), placeholder: "위도", required: true }), React.createElement("input", { value: cctvForm.lng, onChange: e => setCctvForm({ ...cctvForm, lng: e.target.value }), placeholder: "경도", required: true })), React.createElement("button", { className: "primary" }, "등록")),
+          React.createElement("form", { className: "mini-form", onSubmit: submitLog }, React.createElement("h3", null, "열람기록 등록"), React.createElement("select", { value: logForm.cctvId, onChange: e => setLogForm({ ...logForm, cctvId: e.target.value }) }, db.cctvs.map(cctv => React.createElement("option", { key: cctv.id, value: cctv.id }, cctv.name))), React.createElement("input", { type: "datetime-local", value: logForm.date, onChange: e => setLogForm({ ...logForm, date: e.target.value }), required: true }), React.createElement("input", { value: logForm.purpose, onChange: e => setLogForm({ ...logForm, purpose: e.target.value }), placeholder: "열람 목적", required: true }), React.createElement("input", { value: logForm.agency, onChange: e => setLogForm({ ...logForm, agency: e.target.value }), placeholder: "기관명", required: true }), React.createElement("button", { className: "primary" }, "등록")),
+          React.createElement("section", { className: "report-list" }, React.createElement("h3", null, "제보 목록"), db.reports.slice().reverse().map(report => React.createElement("article", { key: report.id, className: "report-item" }, React.createElement("strong", null, report.cctvName), React.createElement("p", null, report.content), React.createElement("span", null, `${formatDateTime(report.createdAt)} · ${report.status}`))))
+        );
+      }
+      ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+    </script>
+  </body>
+</html>

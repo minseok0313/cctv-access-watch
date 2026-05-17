@@ -1,0 +1,17 @@
+{
+  "name": "cctv-access-watch",
+  "version": "1.0.0",
+  "description": "CCTV 악용 방지 및 열람기록 추적 샘플 웹앱",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "cctv",
+    "privacy",
+    "react",
+    "openstreetmap"
+  ],
+  "author": "",
+  "license": "MIT"
+}
